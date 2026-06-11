@@ -11,15 +11,43 @@ export default function CalendarView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
-  // State สำหรับฟอร์ม
   const [eventTitle, setEventTitle] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   
-  const [events, setEvents] = useState([
-    { id: '1', title: 'ประชุมโปรเจกต์', start: '2026-06-11T09:00:00', end: '2026-06-11T12:00:00', allDay: false, backgroundColor: '#6366f1' },
-  ]);
+  // เปลี่ยนค่าเริ่มต้นเป็น Array ว่าง
+  const [events, setEvents] = useState([]);
 
+  // URL ของ Backend API
+  const API_URL = "http://127.0.0.1:8000/api/events";
+
+  // --- 1. ดึงข้อมูลจาก Backend เมื่อโหลดหน้าเว็บ ---
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch(API_URL);
+      if (response.ok) {
+        const data = await response.json();
+        // แปลงรูปแบบข้อมูลให้ตรงกับที่ FullCalendar ต้องการ
+        const formattedEvents = data.map(ev => ({
+          id: String(ev.id),
+          title: ev.title,
+          start: ev.start_time,
+          end: ev.end_time,
+          allDay: ev.all_day,
+          backgroundColor: ev.color
+        }));
+        setEvents(formattedEvents);
+      }
+    } catch (error) {
+      console.error("เชื่อมต่อ Backend ไม่สำเร็จ:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  // --- จัดการ Theme ---
   useEffect(() => {
     if (theme === 'dark') {
       document.body.classList.add('dark');
@@ -33,41 +61,67 @@ export default function CalendarView() {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
-  // เปิด Modal เมื่อคลิกวันที่
   const handleDateClick = (arg) => {
     setSelectedDateStr(arg.dateStr);
     setIsModalOpen(true);
   };
 
-  // ลบนัดหมายเมื่อคลิกที่กิจกรรม
-  const handleEventClick = (clickInfo) => {
+  // --- 2. ลบนัดหมาย (ส่ง DELETE ไปที่ Backend) ---
+  const handleEventClick = async (clickInfo) => {
     if (window.confirm(`คุณต้องการลบนัดหมาย '${clickInfo.event.title}' ใช่หรือไม่?`)) {
-      setEvents(events.filter(event => event.id !== clickInfo.event.id));
+      try {
+        const response = await fetch(`${API_URL}/${clickInfo.event.id}`, {
+          method: 'DELETE',
+        });
+        if (response.ok) {
+          // ถ้าลบในฐานข้อมูลสำเร็จ ให้ลบออกจากหน้าจอด้วย
+          setEvents(events.filter(event => event.id !== clickInfo.event.id));
+        }
+      } catch (error) {
+        alert("เกิดข้อผิดพลาดในการลบข้อมูล");
+      }
     }
   };
 
-  // บันทึกนัดหมาย
-  const handleAddEvent = () => {
+  // --- 3. เพิ่มนัดหมายใหม่ (ส่ง POST ไปที่ Backend) ---
+  const handleAddEvent = async () => {
     if (!eventTitle) {
       alert('กรุณากรอกชื่อนัดหมายครับ');
       return;
     }
 
-    // รวมวันที่และเวลาเข้าด้วยกัน (ถ้าไม่ได้เลือกเวลา จะถือว่าเป็นกิจกรรมทั้งวัน)
-    const startDateTime = startTime ? `${selectedDateStr}T${startTime}:00` : selectedDateStr;
-    const endDateTime = endTime ? `${selectedDateStr}T${endTime}:00` : undefined;
+    const startDateTime = startTime ? `${selectedDateStr}T${startTime}:00` : `${selectedDateStr}T00:00:00`;
+    const endDateTime = endTime ? `${selectedDateStr}T${endTime}:00` : null;
+    const isAllDay = !startTime;
 
-    const newEvent = {
-      id: String(Date.now()),
+    // โครงสร้างข้อมูลที่ Backend ต้องการ
+    const newEventPayload = {
       title: eventTitle,
-      start: startDateTime,
-      end: endDateTime,
-      allDay: !startTime, // ถ้าไม่มีเวลาเริ่ม = allDay
-      backgroundColor: '#10b981'
+      start_time: startDateTime,
+      end_time: endDateTime,
+      all_day: isAllDay,
+      color: '#6366f1' // สีหลักของแอป
     };
 
-    setEvents([...events, newEvent]);
-    closeModal();
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newEventPayload),
+      });
+
+      if (response.ok) {
+        // ถ้าบันทึกสำเร็จ ให้ดึงข้อมูลใหม่ทั้งหมดมาแสดง (เพื่อเอา ID จริงจาก Database)
+        fetchEvents();
+        closeModal();
+      } else {
+        alert("ไม่สามารถบันทึกข้อมูลได้");
+      }
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาด:", error);
+    }
   };
 
   const closeModal = () => {
@@ -100,7 +154,7 @@ export default function CalendarView() {
           events={events}
           height="70vh"
           dateClick={handleDateClick}
-          eventClick={handleEventClick} // ฟังก์ชันคลิกเพื่อลบ
+          eventClick={handleEventClick}
           dayMaxEvents={true}
         />
       </div>
@@ -124,7 +178,6 @@ export default function CalendarView() {
                 autoFocus
               />
               
-              {/* ช่องกรอกเวลา */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div style={{ flex: 1 }}>
                   <label>เวลาเริ่ม (ตัวเลือก)</label>
