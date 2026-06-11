@@ -11,3 +11,4 @@ class Event(Base):
     end_time = Column(DateTime, nullable=True)
     all_day = Column(Boolean, default=True)
     color = Column(String(50), default="#10b981")
+    priority = Column(Integer, default=3)  # เพิ่มบรรทัดนี้ (1: ด่วนที่สุด, 2: สำคัญ, 3: ทั่วไป)

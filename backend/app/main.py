@@ -14,9 +14,13 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Calendar API")
 
 # ตั้งค่า CORS อนุญาตให้ Frontend (Vite พอร์ต 5173) เรียกใช้งาน API ได้
+# อนุญาตให้เชื่อมต่อได้ทั้ง localhost และ 127.0.0.1
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], 
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
